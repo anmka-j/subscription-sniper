@@ -12,25 +12,7 @@ import { SubscriptionsService } from './subscriptions.service.js';
 const FetchSubscriptionEmailsSchema = z.object({
     account_email: z.string().email().optional().describe('Expected Gmail account for the OAuth refresh token, for example generalusermcp@gmail.com'),
     max_results: z.number().int().min(1).max(25).default(6).describe('Maximum number of matching subscription emails to return'),
-    fallback_to_mock: z.boolean().default(false).describe('Return demo subscription emails if live Gmail fails. Defaults to false so OAuth issues are visible.'),
-});
-const FetchGmailEmailsSchema = z.object({
-    account_email: z.string().email().optional().describe('Expected Gmail account for the OAuth refresh token, for example generalusermcp@gmail.com'),
-    query: z.string().min(1).describe('Gmail search query, for example from:billing@netflix.com or subject:invoice'),
-    max_results: z.number().int().min(1).max(25).default(10).describe('Maximum number of matching Gmail messages to return'),
-    fallback_to_mock: z.boolean().default(false).describe('Return demo subscription emails if live Gmail fails. Defaults to false so OAuth issues are visible.'),
-});
-const SearchEmailsBySenderSchema = z.object({
-    account_email: z.string().email().optional().describe('Expected Gmail account for the OAuth refresh token, for example generalusermcp@gmail.com'),
-    sender_email: z.string().email().describe('Sender email address to search for'),
-    max_results: z.number().int().min(1).max(25).default(10).describe('Maximum number of matching Gmail messages to return'),
-    fallback_to_mock: z.boolean().default(false).describe('Return demo subscription emails if live Gmail fails. Defaults to false so OAuth issues are visible.'),
-});
-const SearchEmailsBySubjectSchema = z.object({
-    account_email: z.string().email().optional().describe('Expected Gmail account for the OAuth refresh token, for example generalusermcp@gmail.com'),
-    subject: z.string().min(1).describe('Subject text to search for'),
-    max_results: z.number().int().min(1).max(25).default(10).describe('Maximum number of matching Gmail messages to return'),
-    fallback_to_mock: z.boolean().default(false).describe('Return demo subscription emails if live Gmail fails. Defaults to false so OAuth issues are visible.'),
+    fallback_to_mock: z.boolean().default(true).describe('Return demo subscription emails if live Gmail fails. fetch_subscription_emails always falls back to mock data on Gmail errors.'),
 });
 const GmailConnectionStatusSchema = z.object({
     account_email: z.string().email().optional().describe('Expected Gmail account for the OAuth refresh token, for example generalusermcp@gmail.com'),
@@ -65,43 +47,9 @@ let SubscriptionsTools = class SubscriptionsTools {
             total: result.emails.length,
         };
     }
-    async fetchBillingEmails(args, ctx) {
-        return this.fetchSubscriptionEmails(args, ctx);
-    }
-    async fetchGmailEmails(args, ctx) {
-        const result = await this.subscriptionsService.fetchGmailEmails(args.query, args.max_results, ctx, args.account_email, args.fallback_to_mock);
-        ctx.logger.info('Fetched Gmail emails', {
-            source: result.source,
-            total: result.emails.length,
-            maxResults: args.max_results,
-            accountEmail: args.account_email,
-        });
-        return {
-            emails: result.emails,
-            source: result.source,
-            connected_account: result.connected_account,
-            total: result.emails.length,
-        };
-    }
-    async searchEmailsBySender(args, ctx) {
-        return this.fetchGmailEmails({
-            account_email: args.account_email,
-            query: `from:${args.sender_email}`,
-            max_results: args.max_results,
-            fallback_to_mock: args.fallback_to_mock,
-        }, ctx);
-    }
-    async searchEmailsBySubject(args, ctx) {
-        return this.fetchGmailEmails({
-            account_email: args.account_email,
-            query: `subject:(${args.subject})`,
-            max_results: args.max_results,
-            fallback_to_mock: args.fallback_to_mock,
-        }, ctx);
-    }
-    async gmailConnectionStatus(args, ctx) {
+    async checkGmailConnection(args, ctx) {
         const status = await this.subscriptionsService.getGmailConnectionStatus(ctx, args.account_email);
-        ctx.logger.info('Checked Gmail connection status', {
+        ctx.logger.info('Checked Gmail connection through temporary diagnostic tool', {
             configured: status.configured,
             connected: status.connected,
             connectedAccount: status.connected_account,
@@ -149,7 +97,7 @@ let SubscriptionsTools = class SubscriptionsTools {
 __decorate([
     Tool({
         name: 'fetch_subscription_emails',
-        description: 'Fetch real subscription and billing email bodies from the Gmail account connected by GMAIL_REFRESH_TOKEN. Pass account_email to verify the token belongs to that Gmail account. Live Gmail errors are thrown by default; set fallback_to_mock=true only for demos.',
+        description: 'Fetch real subscription and billing email bodies from the Gmail account connected by GMAIL_REFRESH_TOKEN. Pass account_email to verify the token belongs to that Gmail account. Gmail errors are logged and return mock subscription emails as fallback.',
         inputSchema: FetchSubscriptionEmailsSchema,
         examples: {
             request: { account_email: 'generalusermcp@gmail.com', max_results: 5 },
@@ -172,93 +120,14 @@ __decorate([
 ], SubscriptionsTools.prototype, "fetchSubscriptionEmails", null);
 __decorate([
     Tool({
-        name: 'fetch_billing_emails',
-        description: 'Alias for fetch_subscription_emails. Fetch real billing, invoice, receipt, renewal, subscription, and payment emails from the connected Gmail account.',
-        inputSchema: FetchSubscriptionEmailsSchema,
-        examples: {
-            request: { account_email: 'generalusermcp@gmail.com', max_results: 10 },
-            response: {
-                emails: [
-                    {
-                        id: '18f2examplemessage',
-                        body: 'Spotify Premium receipt...',
-                    },
-                ],
-                source: 'live',
-                connected_account: 'generalusermcp@gmail.com',
-                total: 1,
-            },
-        },
-    }),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [void 0, Object]),
-    __metadata("design:returntype", Promise)
-], SubscriptionsTools.prototype, "fetchBillingEmails", null);
-__decorate([
-    Tool({
-        name: 'fetch_gmail_emails',
-        description: 'Fetch real Gmail messages from the connected account using a custom Gmail search query. Pass account_email to verify the token belongs to that Gmail account. Live Gmail errors are thrown by default; set fallback_to_mock=true only for demos.',
-        inputSchema: FetchGmailEmailsSchema,
-        examples: {
-            request: { account_email: 'generalusermcp@gmail.com', query: 'from:billing@netflix.com', max_results: 5 },
-            response: {
-                emails: [
-                    {
-                        id: '18f2examplemessage',
-                        body: 'Netflix billing email...',
-                    },
-                ],
-                source: 'live',
-                connected_account: 'generalusermcp@gmail.com',
-                total: 1,
-            },
-        },
-    }),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [void 0, Object]),
-    __metadata("design:returntype", Promise)
-], SubscriptionsTools.prototype, "fetchGmailEmails", null);
-__decorate([
-    Tool({
-        name: 'search_emails_by_sender',
-        description: 'Search real Gmail messages from the connected account by sender email address.',
-        inputSchema: SearchEmailsBySenderSchema,
-    }),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [void 0, Object]),
-    __metadata("design:returntype", Promise)
-], SubscriptionsTools.prototype, "searchEmailsBySender", null);
-__decorate([
-    Tool({
-        name: 'search_emails_by_subject',
-        description: 'Search real Gmail messages from the connected account by subject text.',
-        inputSchema: SearchEmailsBySubjectSchema,
-    }),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [void 0, Object]),
-    __metadata("design:returntype", Promise)
-], SubscriptionsTools.prototype, "searchEmailsBySubject", null);
-__decorate([
-    Tool({
-        name: 'gmail_connection_status',
-        description: 'Check whether Gmail OAuth is configured and which Gmail account is connected. Pass account_email to verify the refresh token belongs to that Gmail account.',
+        name: 'check_gmail_connection',
+        description: 'Temporary diagnostic tool: check whether Gmail OAuth is configured, connected, and which error message is returned if connection fails.',
         inputSchema: GmailConnectionStatusSchema,
-        examples: {
-            request: { account_email: 'generalusermcp@gmail.com' },
-            response: {
-                configured: true,
-                connected: true,
-                connected_account: 'generalusermcp@gmail.com',
-                expected_account: 'generalusermcp@gmail.com',
-                source: 'live',
-                message: 'Gmail is connected as generalusermcp@gmail.com.',
-            },
-        },
     }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [void 0, Object]),
     __metadata("design:returntype", Promise)
-], SubscriptionsTools.prototype, "gmailConnectionStatus", null);
+], SubscriptionsTools.prototype, "checkGmailConnection", null);
 __decorate([
     Tool({
         name: 'extract_subscription_metadata',

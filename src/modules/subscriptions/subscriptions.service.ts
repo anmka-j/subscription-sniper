@@ -60,36 +60,13 @@ const REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
 export class SubscriptionsService {
     private readonly trackedSubscriptions = new Map<string, SubscriptionRecord>();
 
-    async fetchEmails(maxResults: number, ctx: ExecutionContext, expectedAccount?: string, fallbackToMock = false): Promise<FetchEmailsResult> {
+    async fetchEmails(maxResults: number, ctx: ExecutionContext, expectedAccount?: string, fallbackToMock = true): Promise<FetchEmailsResult> {
         const limit = Math.max(1, maxResults);
 
         try {
             return await this.fetchLiveGmailEmails(GMAIL_BILLING_QUERY, limit, expectedAccount);
         } catch (error) {
-            ctx.logger.error(fallbackToMock ? 'Failed to fetch live Gmail messages; falling back to mock subscription emails' : 'Failed to fetch live Gmail messages', error instanceof Error ? error : { error: String(error) });
-
-            if (!fallbackToMock) {
-                throw error;
-            }
-
-            return {
-                emails: this.getMockBillingEmails(limit),
-                source: 'mock',
-            };
-        }
-    }
-
-    async fetchGmailEmails(query: string, maxResults: number, ctx: ExecutionContext, expectedAccount?: string, fallbackToMock = false): Promise<FetchEmailsResult> {
-        const limit = Math.max(1, maxResults);
-
-        try {
-            return await this.fetchLiveGmailEmails(query, limit, expectedAccount);
-        } catch (error) {
-            ctx.logger.error(fallbackToMock ? 'Failed to fetch live Gmail messages for custom query; falling back to mock subscription emails' : 'Failed to fetch live Gmail messages for custom query', error instanceof Error ? error : { error: String(error) });
-
-            if (!fallbackToMock) {
-                throw error;
-            }
+            ctx.logger.error('Failed to fetch live Gmail messages; falling back to mock subscription emails', error instanceof Error ? error : { error: String(error) });
 
             return {
                 emails: this.getMockBillingEmails(limit),

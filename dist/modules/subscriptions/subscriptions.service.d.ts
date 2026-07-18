@@ -44,7 +44,6 @@ export interface GmailConnectionStatus {
 export declare class SubscriptionsService {
     private readonly trackedSubscriptions;
     fetchEmails(maxResults: number, ctx: ExecutionContext, expectedAccount?: string, fallbackToMock?: boolean): Promise<FetchEmailsResult>;
-    fetchGmailEmails(query: string, maxResults: number, ctx: ExecutionContext, expectedAccount?: string, fallbackToMock?: boolean): Promise<FetchEmailsResult>;
     getGmailConnectionStatus(ctx: ExecutionContext, expectedAccount?: string): Promise<GmailConnectionStatus>;
     extractAndStore(emailBody: string): SubscriptionRecord;
     checkEngagement(serviceName: string): EngagementStatus;
